@@ -17,7 +17,9 @@ const userRoutes = require('./routes/users');
 // Security middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: false
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
 }));
 
 // Rate limiting
@@ -44,7 +46,6 @@ const corsOptions = {
     
     const allowedOrigins = [
       process.env.FRONTEND_URL,
-      'https://xyzobywatel00.netlify.app',
       'https://xyzobywatel404.netlify.app',
       'http://localhost:3000',
       'http://localhost:8080',
@@ -53,21 +54,44 @@ const corsOptions = {
       'https://localhost:3000',
       'https://127.0.0.1:3000',
       'https://backendm-9np8.onrender.com'
-    ];
+    ].filter(Boolean); // Remove any undefined values
+    
+    // For development, allow all local origins
+    if (process.env.NODE_ENV !== 'production') {
+      if (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:')) {
+        return callback(null, true);
+      }
+    }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.warn(`Rejected CORS request from origin: ${origin}`);
       callback(new Error('Nie dozwolone przez CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-  exposedHeaders: ['Set-Cookie']
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400 // 24 hours in seconds
 };
 
 app.use(cors(corsOptions));
+
+// Additional security headers
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  next();
+});
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -111,7 +135,7 @@ console.log('Environment Configuration:', {
 // Connect to database
 connectDB();
 
-// Health check endpoint
+// Health check endpoints
 app.get('/', (req, res) => {
   res.json({
     message: 'Obywtel Backend API',
@@ -120,6 +144,21 @@ app.get('/', (req, res) => {
     version: '1.0.0'
   });
 });
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    server: 'online',
+    cors: {
+      origin: req.headers.origin || 'unknown',
+      allowed: true
+    }
+  });
+});
+
+// Enable pre-flight requests for all routes
+app.options('*', cors(corsOptions));
 
 // API routes
 app.use('/api/auth', authRoutes);
