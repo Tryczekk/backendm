@@ -22,13 +22,17 @@ app.use(helmet({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 5 * 60 * 1000, // 5 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500, // limit each IP to 500 requests per windowMs
   message: {
     error: 'Zbyt wiele żądań z tego IP, spróbuj ponownie później.'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: function (req) {
+    // Skip rate limiting for OPTIONS requests and ping endpoint
+    return req.method === 'OPTIONS' || req.path === '/ping';
+  }
 });
 
 app.use(limiter);
@@ -48,14 +52,16 @@ const corsOptions = {
       'http://xyzobywatel404.netlify.app',
       'https://www.xyzobywatel404.netlify.app',
       'http://www.xyzobywatel404.netlify.app',
+      'https://fancy-meerkat-331f14.netlify.app',
       'http://localhost:3000',
       'http://localhost:8080',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:8080',
       'https://localhost:3000',
       'https://127.0.0.1:3000',
-      'https://backendm-9np8.onrender.com'
-    ].filter(Boolean); // Remove any undefined values
+      'https://backendm-9np8.onrender.com',
+      'http://backendm-9np8.onrender.com'
+    ].filter(Boolean);
     
     // For development, allow all local origins
     if (process.env.NODE_ENV !== 'production') {
@@ -149,23 +155,33 @@ console.log('Environment Configuration:', {
 connectDB();
 
 // Health check endpoints
-app.get('/', (req, res) => {
+app.get('/', cors(corsOptions), (req, res) => {
   res.json({
     message: 'Obywtel Backend API',
     status: 'running',
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    origin: req.headers.origin || 'unknown'
   });
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', cors(corsOptions), (req, res) => {
+  const origin = req.headers.origin;
+  let allowed = false;
+  
+  if (origin) {
+    corsOptions.origin(origin, (err, result) => {
+      allowed = !err && result;
+    });
+  }
+  
   res.json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     server: 'online',
     cors: {
-      origin: req.headers.origin || 'unknown',
-      allowed: true
+      origin: origin || 'unknown',
+      allowed: allowed
     }
   });
 });
