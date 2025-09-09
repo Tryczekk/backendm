@@ -46,14 +46,15 @@ const corsOptions = {
       process.env.FRONTEND_URL,
       'https://xyzobywatel404.netlify.app',
       'http://xyzobywatel404.netlify.app',
+      'https://www.xyzobywatel404.netlify.app',
+      'http://www.xyzobywatel404.netlify.app',
       'http://localhost:3000',
       'http://localhost:8080',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:8080',
       'https://localhost:3000',
       'https://127.0.0.1:3000',
-      'https://backendm-9np8.onrender.com',
-      'https://xyzobywatel404.netlify.app'
+      'https://backendm-9np8.onrender.com'
     ].filter(Boolean); // Remove any undefined values
     
     // For development, allow all local origins
@@ -82,18 +83,26 @@ app.use(cors(corsOptions));
 // Additional security headers
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (origin && corsOptions.origin(origin, (err, allowed) => allowed)) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   
-  // Handle preflight
+  // Explicitly handle CORS for all routes
+  if (origin) {
+    corsOptions.origin(origin, (err, allowed) => {
+      if (allowed) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Auth-Token');
+        res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+      }
+    });
+  }
+
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
+
   next();
 });
 
@@ -159,6 +168,24 @@ app.get('/api/health', (req, res) => {
       allowed: true
     }
   });
+});
+
+// JSONP compatible ping endpoint
+app.get('/ping', cors(corsOptions), (req, res) => {
+  const callback = req.query.callback;
+  const response = {
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin || 'unknown'
+  };
+  
+  if (callback) {
+    res.type('application/javascript');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.send(`${callback}(${JSON.stringify(response)})`);
+  } else {
+    res.json(response);
+  }
 });
 
 // Enable pre-flight requests for all routes
