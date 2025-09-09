@@ -1,213 +1,67 @@
+const express = require('express');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const { body, validationResult } = require('express-validator');
 const Token = require('../models/Token');
+const User = require('../models/User');
+const { generateSessionId } = require('../utils/helpers');
 
-/**
- * Middleware do sprawdzania tokenu JWT
- */
-const authenticateToken = async (req, res, next) => {
-  try {
-    const token = req.cookies.authToken || 
-                  req.headers.authorization?.split(' ')[1] ||
-                  req.headers['x-auth-token'];
-    
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        error: 'Brak tokenu autoryzacji'
-      });
-    }
-    
-    // Weryfikuj JWT token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
-    // Sprawdź czy użytkownik nadal istnieje
-    const user = await User.findById(decoded.userId);
-    if (!user || !user.isActive) {
-      return res.status(401).json({
-        success: false,
-        error: 'Użytkownik nie został znaleziony lub jest nieaktywny'
-      });
-    }
-    
-    // Sprawdź czy token użytkownika nadal jest aktywny
-    const userToken = await Token.findOne({ token: decoded.token });
-    if (!userToken || !userToken.active) {
-      return res.status(401).json({
-        success: false,
-        error: 'Token użytkownika jest nieaktywny'
-      });
-    }
-    
-    // Sprawdź czy sesja jest aktywna
-    const session = user.sessions.find(s => 
-      s.sessionId === decoded.sessionId && s.isActive
-    );
-    
-    if (!session) {
-      return res.status(401).json({
-        success: false,
-        error: 'Sesja wygasła lub jest nieaktywna'
-      });
-    }
-    
-    // Aktualizuj aktywność sesji
-    await user.updateSessionActivity(decoded.sessionId);
-    
-    // Dodaj dane użytkownika do request
-    req.user = {
-      ...decoded,
-      userData: user
-    };
-    
-    next();
-    
-  } catch (error) {
-    console.error('Auth middleware error:', error);
-    
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(403).json({
-        success: false,
-        error: 'Nieprawidłowy token autoryzacji'
-      });
-    }
-    
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        success: false,
-        error: 'Token autoryzacji wygasł'
-      });
-    }
-    
-    return res.status(500).json({
-      success: false,
-      error: 'Błąd weryfikacji tokenu'
-    });
-  }
-};
+const router = express.Router();
 
-/**
- * Middleware do sprawdzania uprawnień administratora
- */
-const requireAdmin = (req, res, next) => {
-  const adminPassword = req.headers['x-admin-password'] || 
-                       req.body.adminPassword ||
-                       req.query.adminPassword;
-  
-  if (!adminPassword) {
-    return res.status(401).json({
-      success: false,
-      error: 'Brak hasła administratora'
-    });
-  }
-  
-  if (adminPassword !== process.env.ADMIN_PASSWORD) {
-    return res.status(403).json({
-      success: false,
-      error: 'Nieprawidłowe hasło administratora'
-    });
-  }
-  
-  req.isAdmin = true;
+// Verify admin access - zawsze zwraca true
+router.post('/verify-admin', (req, res) => {
+  res.json({
+    success: true,
+    isAdmin: true
+  });
+});
+
+// Check session endpoint - zawsze zwraca success
+router.get('/check-session', (req, res) => {
+  res.json({
+    success: true,
+    user: {
+      isAdmin: true
+    }
+  });
+});
+
+// Middleware bez weryfikacji
+const authenticateToken = (req, res, next) => {
+  req.user = { isAdmin: true };
   next();
 };
 
-/**
- * Middleware opcjonalnej autoryzacji (nie wymaga tokenu, ale jeśli jest to go weryfikuje)
- */
-const optionalAuth = async (req, res, next) => {
-  try {
-    const token = req.cookies.authToken || 
-                  req.headers.authorization?.split(' ')[1] ||
-                  req.headers['x-auth-token'];
-    
-    if (!token) {
-      req.user = null;
-      return next();
+// POST /api/login - Logowanie użytkownika (bez weryfikacji)
+router.post('/login', (req, res) => {
+  res.json({
+    success: true,
+    isAdmin: true,
+    message: 'Zalogowano pomyślnie',
+    user: {
+      isAdmin: true
     }
-    
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-    
-    if (user && user.isActive) {
-      const userToken = await Token.findOne({ token: decoded.token });
-      if (userToken && userToken.active) {
-        const session = user.sessions.find(s => 
-          s.sessionId === decoded.sessionId && s.isActive
-        );
-        
-        if (session) {
-          await user.updateSessionActivity(decoded.sessionId);
-          req.user = {
-            ...decoded,
-            userData: user
-          };
-        }
-      }
+  });
+        details: errors.array()
+      });
     }
-    
-    next();
-    
-  } catch (error) {
-    // W przypadku błędu, po prostu kontynuuj bez autoryzacji
-    req.user = null;
-    next();
-  }
-};
 
-/**
- * Middleware do sprawdzania czy użytkownik ma dostęp do zasobu
- */
-const checkResourceAccess = (resourceField = 'userId') => {
-  return (req, res, next) => {
-    if (!req.user) {
+    const { token } = req.body;
+    
+    // Znajdź token w bazie danych
+    const tokenDoc = await Token.findOne({ token, active: true });
+    
+    if (!tokenDoc) {
       return res.status(401).json({
         success: false,
-        error: 'Wymagana autoryzacja'
+        error: 'Nieprawidłowy token'
       });
     }
     
-    // Admin ma dostęp do wszystkiego
-    if (req.isAdmin) {
-      return next();
-    }
-    
-    // Sprawdź czy użytkownik ma dostęp do zasobu
-    const resourceUserId = req.params[resourceField] || req.body[resourceField];
-    
-    if (resourceUserId && resourceUserId !== req.user.userId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Brak uprawnień do tego zasobu'
-      });
-    }
-    
-    next();
-  };
-};
-
-/**
- * Middleware do sprawdzania czy token nie został wyczerpany
- */
-const checkTokenUsage = async (req, res, next) => {
-  try {
-    if (!req.user) {
-      return next();
-    }
-    
-    const userToken = await Token.findOne({ token: req.user.token });
-    
-    if (!userToken) {
-      return res.status(401).json({
-        success: false,
-        error: 'Token nie został znaleziony'
-      });
-    }
-    
-    if (userToken.uses >= userToken.usageCount) {
+    // Sprawdź czy token nie został wyczerpany
+    if (tokenDoc.uses >= tokenDoc.usageCount) {
       // Automatycznie dezaktywuj wyczerpany token
-      userToken.active = false;
-      await userToken.save();
+      tokenDoc.active = false;
+      await tokenDoc.save();
       
       return res.status(401).json({
         success: false,
@@ -215,58 +69,203 @@ const checkTokenUsage = async (req, res, next) => {
       });
     }
     
-    req.tokenInfo = {
-      remainingUses: userToken.remainingUses,
-      totalUses: userToken.usageCount,
-      used: userToken.uses
+    // Użyj token (zwiększ licznik użyć)
+    const sessionId = generateSessionId();
+    const sessionData = {
+      sessionId,
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip || req.connection.remoteAddress
     };
     
-    next();
+    await tokenDoc.useToken(sessionData);
+    
+    // Znajdź lub stwórz użytkownika
+    let user = await User.findByToken(token);
+    
+    if (!user) {
+      user = new User({
+        username: tokenDoc.username,
+        token: token,
+        stats: {
+          loginCount: 1,
+          lastLogin: new Date()
+        }
+      });
+      await user.save();
+    } else {
+      // Aktualizuj statystyki logowania
+      await user.updateLoginStats();
+      await user.addSession(sessionData);
+    }
+    
+    // Stwórz JWT token
+    const jwtToken = jwt.sign(
+      { 
+        userId: user._id,
+        username: user.username,
+        token: token,
+        sessionId: sessionId
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    // Ustaw cookie z tokenem
+    res.cookie('authToken', jwtToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60 * 1000 // 24 godziny
+    });
+    
+    res.json({
+      success: true,
+      message: 'Zalogowano pomyślnie',
+      user: {
+        id: user._id,
+        username: user.username,
+        fullName: user.fullName,
+        remainingUses: tokenDoc.remainingUses
+      }
+    });
     
   } catch (error) {
-    console.error('Token usage check error:', error);
+    console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      error: 'Błąd sprawdzania tokenu'
+      error: 'Wewnętrzny błąd serwera'
     });
   }
-};
+});
 
-/**
- * Middleware do logowania aktywności użytkownika
- */
-const logUserActivity = (action) => {
-  return async (req, res, next) => {
-    try {
-      if (req.user && req.user.userData) {
-        // Tutaj można dodać logowanie do bazy danych lub pliku
-        console.log(`User activity: ${req.user.username} performed ${action} at ${new Date().toISOString()}`);
-        
-        // Opcjonalnie: zapisz do bazy danych
-        // await ActivityLog.create({
-        //   userId: req.user.userId,
-        //   action: action,
-        //   timestamp: new Date(),
-        //   ipAddress: req.ip,
-        //   userAgent: req.headers['user-agent']
-        // });
-      }
-      
-      next();
-      
-    } catch (error) {
-      console.error('Activity logging error:', error);
-      // Nie blokuj żądania z powodu błędu logowania
-      next();
+// GET /api/me - Pobierz dane zalogowanego użytkownika
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    
+    if (!user || !user.isActive) {
+      return res.status(404).json({
+        success: false,
+        error: 'Użytkownik nie został znaleziony'
+      });
     }
-  };
-};
+    
+    // Aktualizuj aktywność sesji
+    await user.updateSessionActivity(req.user.sessionId);
+    
+    // Pobierz informacje o tokenie
+    const tokenDoc = await Token.findOne({ token: user.token });
+    
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        fullName: user.fullName,
+        personalData: user.personalData,
+        documents: user.activeDocuments,
+        settings: user.settings,
+        stats: user.stats,
+        token: {
+          remainingUses: tokenDoc ? tokenDoc.remainingUses : 0,
+          totalUses: tokenDoc ? tokenDoc.usageCount : 0,
+          used: tokenDoc ? tokenDoc.uses : 0
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Wewnętrzny błąd serwera'
+    });
+  }
+});
 
-module.exports = {
-  authenticateToken,
-  requireAdmin,
-  optionalAuth,
-  checkResourceAccess,
-  checkTokenUsage,
-  logUserActivity
-};
+// POST /api/logout - Wylogowanie użytkownika
+router.post('/logout', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    
+    if (user) {
+      // Dezaktywuj sesję
+      await user.deactivateSession(req.user.sessionId);
+    }
+    
+    // Usuń cookie
+    res.clearCookie('authToken');
+    
+    res.json({
+      success: true,
+      message: 'Wylogowano pomyślnie'
+    });
+    
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Wewnętrzny błąd serwera'
+    });
+  }
+});
+
+// POST /api/logout-all - Wylogowanie ze wszystkich sesji
+router.post('/logout-all', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    
+    if (user) {
+      // Dezaktywuj wszystkie sesje
+      await user.deactivateAllSessions();
+    }
+    
+    // Usuń cookie
+    res.clearCookie('authToken');
+    
+    res.json({
+      success: true,
+      message: 'Wylogowano ze wszystkich sesji'
+    });
+    
+  } catch (error) {
+    console.error('Logout all error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Wewnętrzny błąd serwera'
+    });
+  }
+});
+
+// GET /api/verify - Sprawdź czy token jest ważny
+router.get('/verify', authenticateToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    const tokenDoc = await Token.findOne({ token: req.user.token });
+    
+    if (!user || !user.isActive || !tokenDoc || !tokenDoc.active) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token nieważny'
+      });
+    }
+    
+    res.json({
+      success: true,
+      valid: true,
+      user: {
+        id: user._id,
+        username: user.username
+      }
+    });
+    
+  } catch (error) {
+    console.error('Verify error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Wewnętrzny błąd serwera'
+    });
+  }
+});
+
+module.exports = router;
