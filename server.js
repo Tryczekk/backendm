@@ -44,6 +44,7 @@ const corsOptions = {
     
     const allowedOrigins = [
       process.env.FRONTEND_URL,
+      'https://xyzobywatel00.netlify.app',
       'https://xyzobywatel404.netlify.app',
       'http://localhost:3000',
       'http://localhost:8080',
