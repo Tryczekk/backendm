@@ -17,9 +17,7 @@ const userRoutes = require('./routes/users');
 // Security middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+  contentSecurityPolicy: false
 }));
 
 // Rate limiting
@@ -47,13 +45,15 @@ const corsOptions = {
     const allowedOrigins = [
       process.env.FRONTEND_URL,
       'https://xyzobywatel404.netlify.app',
+      'http://xyzobywatel404.netlify.app',
       'http://localhost:3000',
       'http://localhost:8080',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:8080',
       'https://localhost:3000',
       'https://127.0.0.1:3000',
-      'https://backendm-9np8.onrender.com'
+      'https://backendm-9np8.onrender.com',
+      'https://xyzobywatel404.netlify.app'
     ].filter(Boolean); // Remove any undefined values
     
     // For development, allow all local origins
@@ -81,6 +81,10 @@ app.use(cors(corsOptions));
 
 // Additional security headers
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && corsOptions.origin(origin, (err, allowed) => allowed)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
