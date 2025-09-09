@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: obywtel-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: MONGODB_URI
+        value: mongodb+srv://privny0:Patrycjusz2134@cluster0.gvzdl4i.mongodb.net/dowodzik?retryWrites=true&w=majority
+      - key: JWT_SECRET
+        value: obywtel-super-secret-jwt-key-2024-production-safe-key-min-32-chars
+      - key: ADMIN_PASSWORD
+        value: Patrycjusz2134
+      - key: FRONTEND_URL
+        value: https://xyzobywatel00.netlify.app
+      - key: RATE_LIMIT_WINDOW_MS
+        value: 900000
+      - key: RATE_LIMIT_MAX_REQUESTS
+        value: 100
