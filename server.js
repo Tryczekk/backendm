@@ -54,7 +54,10 @@ const corsOptions = {
       'https://127.0.0.1:3000'
     ];
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (
+      allowedOrigins.indexOf(origin) !== -1 ||
+      /^https:\/\/xyzobywatel.*\.netlify\.app$/.test(origin)
+    ) {
       callback(null, true);
     } else {
       callback(new Error('Nie dozwolone przez CORS'));
