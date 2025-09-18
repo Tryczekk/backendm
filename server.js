@@ -45,7 +45,7 @@ const corsOptions = {
     const allowedOrigins = [
       process.env.FRONTEND_URL,
       'https://xyzobywatel404.netlify.app',
-       'https://xyzobywatel00.netlify.app', // Dodano nową domenę
+       'https://xyzobywatel.netlify.app', // Dodano nową domenę
       'http://localhost:3000',
       'http://localhost:8080',
       'http://127.0.0.1:3000',
