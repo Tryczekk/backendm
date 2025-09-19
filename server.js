@@ -19,7 +19,20 @@ const userRoutes = require('./routes/users');
 // Security middleware
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", process.env.FRONTEND_URL, "https://backendm-9np8.onrender.com"],
+      frameSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameAncestors: ["'self'"]
+    }
+  }
 }));
 
 // Rate limiting
@@ -43,6 +56,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
+    
     const allowedOrigins = [
       process.env.FRONTEND_URL,
       'https://xyzobywatel.netlify.app',
@@ -51,7 +65,9 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:8080',
       'https://localhost:3000',
-      'https://127.0.0.1:3000'
+      'https://127.0.0.1:3000',
+      // Dodaj URL z którego faktycznie korzystasz
+      'https://backendm-9np8.onrender.com'
     ];
     
     // Dozwolone domeny: xyzobywatel.netlify.app i jej subdomeny
@@ -63,6 +79,7 @@ const corsOptions = {
     if (allowedOrigins.includes(origin) || isNetlifyDomain) {
       callback(null, true);
     } else {
+      console.warn('CORS blocked request from:', origin);
       callback(new Error('Nie dozwolone przez CORS'));
     }
   },
