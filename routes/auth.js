@@ -14,7 +14,8 @@ const authenticateToken = (req, res, next) => {
   if (!token) {
     return res.status(401).json({
       success: false,
-      error: 'Brak tokenu autoryzacji'
+      error: 'Brak tokenu autoryzacji',
+      code: 'TOKEN_MISSING'
     });
   }
   
@@ -25,7 +26,10 @@ const authenticateToken = (req, res, next) => {
   } catch (error) {
     return res.status(403).json({
       success: false,
-      error: 'Nieprawidłowy token autoryzacji'
+      error: error.name === 'TokenExpiredError' ? 
+        'Token wygasł' : 'Nieprawidłowy token autoryzacji',
+      code: error.name === 'TokenExpiredError' ? 
+        'TOKEN_EXPIRED' : 'TOKEN_INVALID'
     });
   }
 };
