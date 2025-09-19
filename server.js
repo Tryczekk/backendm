@@ -8,6 +8,8 @@ const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
 const app = express();
+// Umożliwia poprawne rozpoznawanie IP za proxy (np. Render.com)
+app.set('trust proxy', 1);
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -41,10 +43,9 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
     const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  'https://xyzobywatel.netlify.app',
+      process.env.FRONTEND_URL,
+      'https://xyzobywatel.netlify.app',
       'http://localhost:3000',
       'http://localhost:8080',
       'http://127.0.0.1:3000',
@@ -52,9 +53,9 @@ const corsOptions = {
       'https://localhost:3000',
       'https://127.0.0.1:3000'
     ];
-    
+    // Dynamiczne subdomeny xyzobywatel.netlify.app
     if (
-      allowedOrigins.indexOf(origin) !== -1 ||
+      allowedOrigins.includes(origin) ||
       /^https:\/\/xyzobywatel.*\.netlify\.app$/.test(origin)
     ) {
       callback(null, true);
