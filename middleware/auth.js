@@ -7,40 +7,48 @@ const { generateSessionId } = require('../utils/helpers');
 
 const router = express.Router();
 
-// Verify admin access - zawsze zwraca true
-router.post('/verify-admin', (req, res) => {
-  res.json({
-    success: true,
-    isAdmin: true
-  });
-});
-
-// Check session endpoint - zawsze zwraca success
-router.get('/check-session', (req, res) => {
-  res.json({
-    success: true,
-    user: {
-      isAdmin: true
-    }
-  });
-});
-
-// Middleware bez weryfikacji
+// Middleware do sprawdzania tokenu JWT
 const authenticateToken = (req, res, next) => {
-  req.user = { isAdmin: true };
-  next();
+  const token = req.cookies.authToken || req.headers.authorization?.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Brak tokenu autoryzacji',
+      code: 'TOKEN_MISSING'
+    });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    return res.status(403).json({
+      success: false,
+      error: error.name === 'TokenExpiredError' ? 
+        'Token wygasł' : 'Nieprawidłowy token autoryzacji',
+      code: error.name === 'TokenExpiredError' ? 
+        'TOKEN_EXPIRED' : 'TOKEN_INVALID'
+    });
+  }
 };
 
-// POST /api/login - Logowanie użytkownika (bez weryfikacji)
-router.post('/login', (req, res) => {
-  res.json({
-    success: true,
-    isAdmin: true,
-    message: 'Zalogowano pomyślnie',
-    user: {
-      isAdmin: true
-    }
-  });
+// POST /api/login - Logowanie użytkownika
+router.post('/login', [
+  body('token')
+    .notEmpty()
+    .withMessage('Token jest wymagany')
+    .isLength({ min: 3, max: 50 })
+    .withMessage('Token musi mieć od 3 do 50 znaków')
+], async (req, res) => {
+  try {
+    // Sprawdź błędy walidacji
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Błąd walidacji',
         details: errors.array()
       });
     }
