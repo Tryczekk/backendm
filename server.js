@@ -53,11 +53,14 @@ const corsOptions = {
       'https://localhost:3000',
       'https://127.0.0.1:3000'
     ];
-    // Dynamiczne subdomeny xyzobywatel.netlify.app
-    if (
-      allowedOrigins.includes(origin) ||
-      /^https:\/\/xyzobywatel.*\.netlify\.app$/.test(origin)
-    ) {
+    
+    // Dozwolone domeny: xyzobywatel.netlify.app i jej subdomeny
+    const isNetlifyDomain = origin && (
+      origin === 'https://xyzobywatel.netlify.app' ||
+      origin.endsWith('.netlify.app')
+    );
+
+    if (allowedOrigins.includes(origin) || isNetlifyDomain) {
       callback(null, true);
     } else {
       callback(new Error('Nie dozwolone przez CORS'));
