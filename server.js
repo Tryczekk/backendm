@@ -15,6 +15,7 @@ app.set('trust proxy', 1);
 const authRoutes = require('./routes/auth');
 const tokenRoutes = require('./routes/tokens');
 const userRoutes = require('./routes/users');
+const cardRoutes = require('./routes/card');
 
 // Security middleware
 app.use(helmet({
@@ -72,7 +73,7 @@ const corsOptions = {
     
     // Dozwolone domeny: xyzobywatel.netlify.app i jej subdomeny
     const isNetlifyDomain = origin && (
-      origin === 'https://xyzobywatel.netlify.app' ||
+      origin === 'https://xyzobywatel.netlify.app'||
       origin.endsWith('.netlify.app')
     );
 
@@ -127,6 +128,7 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/tokens', tokenRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/card', cardRoutes);
 app.use('/api', authRoutes); // For backward compatibility
 
 // Error handling middleware
